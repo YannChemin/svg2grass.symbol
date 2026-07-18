@@ -11,9 +11,12 @@ symbol must actually be installed there, not just in a mapset, to be
 usable from `d.vect`'s CLI). GRASS 8.6 has no SVG symbol support at all.
 
 Scope, deliberately kept simple:
-  - SVG path commands supported: M/m L/l H/h V/v C/c A/a Z/z. No S/Q/T
-    (smooth-shorthand) support -- add it if you hit an icon that needs it.
-  - Cubic beziers (C) and elliptical arcs (A) inside a *path* are flattened
+  - SVG path commands supported: M/m L/l H/h V/v C/c S/s A/a Z/z. No Q/T
+    (quadratic) support -- add it if you hit an icon that needs it. S/s
+    (smooth cubic bezier shorthand) reflects the previous curve's second
+    control point per the SVG spec, falling back to the current point
+    when not chained after a C/S command.
+  - Cubic beziers (C, S) and elliptical arcs (A) inside a *path* are flattened
     to straight-line segments (sampled), not re-expressed as GRASS ARC --
     simpler and correct at icon scale, at the cost of an exact curve match.
   - <circle> elements map directly and exactly to GRASS's native ARC
@@ -38,8 +41,8 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 
 _NUM_RE = re.compile(r"[-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?")
-_CMD_LETTERS = set("MmLlHhVvCcAaZz")
-_ARG_COUNTS = {"M": 2, "L": 2, "H": 1, "V": 1, "C": 6, "A": 7, "Z": 0}
+_CMD_LETTERS = set("MmLlHhVvCcSsAaZz")
+_ARG_COUNTS = {"M": 2, "L": 2, "H": 1, "V": 1, "C": 6, "S": 4, "A": 7, "Z": 0}
 BEZIER_SEGMENTS = 12
 ARC_SEGMENTS = 16
 
@@ -143,6 +146,7 @@ def parse_path(d: str) -> list[Subpath]:
     x = y = 0.0
     start_x = start_y = 0.0
     last_cmd = ""
+    last_cubic_control: tuple[float, float] | None = None
     i = 0
 
     def flush(closed: bool):
@@ -198,6 +202,18 @@ def parse_path(d: str) -> list[Subpath]:
             if relative:
                 x1, y1, x2, y2, x3, y3 = x + x1, y + y1, x + x2, y + y2, x + x3, y + y3
             cur.extend(_flatten_cubic((x, y), (x1, y1), (x2, y2), (x3, y3)))
+            last_cubic_control = (x2, y2)
+            x, y = x3, y3
+        elif upper == "S":
+            x2, y2, x3, y3 = args
+            if relative:
+                x2, y2, x3, y3 = x + x2, y + y2, x + x3, y + y3
+            if last_cmd.upper() in ("C", "S") and last_cubic_control is not None:
+                x1, y1 = 2 * x - last_cubic_control[0], 2 * y - last_cubic_control[1]
+            else:
+                x1, y1 = x, y
+            cur.extend(_flatten_cubic((x, y), (x1, y1), (x2, y2), (x3, y3)))
+            last_cubic_control = (x2, y2)
             x, y = x3, y3
         elif upper == "A":
             rx, ry, phi, large_arc, sweep, ex, ey = args
@@ -206,6 +222,8 @@ def parse_path(d: str) -> list[Subpath]:
             cur.extend(_flatten_arc((x, y), rx, ry, phi, large_arc, sweep, (ex, ey)))
             x, y = ex, ey
 
+        if upper not in ("C", "S"):
+            last_cubic_control = None
         last_cmd = cmd
 
     flush(closed=False)

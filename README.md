@@ -14,8 +14,8 @@ INSTALL.md.
 
 ## What it handles
 
-- SVG path commands `M/m L/l H/h V/v C/c A/a Z/z`. No `S`/`Q`/`T`
-  (smooth-shorthand curve) support yet.
+- SVG path commands `M/m L/l H/h V/v C/c S/s A/a Z/z`. No `Q`/`T`
+  (quadratic curve) support yet.
 - Cubic Bézier curves and elliptical arcs inside a path are flattened to
   sampled straight-line segments, not re-expressed as GRASS's native
   `ARC` -- simpler, and correct enough at icon scale, at the cost of an
