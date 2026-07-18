@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "svg2grasssymbol"
+version = "0.1.0"
+description = "Converts simple SVG icons into GRASS GIS's native vector symbol format"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE" }
+
+[project.scripts]
+svg2grasssymbol = "svg2grasssymbol.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["svg2grasssymbol*"]
